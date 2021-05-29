@@ -2,52 +2,38 @@ import re
 
 import pytest
 
-from simon.lexer import Lexer, LexingError, Token
+from simon.lexer import Lexer, LexingError, Token, TokenGenerator
 
 
-class TestLexer:
-    RULES = {
-        "WHITESPACE": re.compile(r"\s+"),
-        "NAME": re.compile("[A-Za-z]+"),
-        "INTEGER": re.compile(r"\d+"),
-    }
+RULES = {
+    "WHITESPACE": re.compile(r"\s+"),
+    "NAME": re.compile("[A-Za-z]+"),
+    "INTEGER": re.compile(r"\d+"),
+}
 
-    def test_next_token(self) -> None:
-        lexer = Lexer("guido 1991", self.RULES)
 
-        assert lexer.next_token() == Token("NAME", "guido")
-        assert lexer.next_token() == Token("WHITESPACE", " ")
-        assert lexer.next_token() == Token("INTEGER", "1991")
-        assert lexer.next_token() is None
+class TestTokenGenerator:
+    def test_TokenGenerator_iter(self) -> None:
+        token_generator = TokenGenerator("guido 1991", RULES)
 
-    def test_iter_until_eof(self) -> None:
-        lexer = Lexer("guido 1991", self.RULES)
-        expected = [
-            Token("NAME", "guido"),
-            Token("WHITESPACE", " "),
-            Token("INTEGER", "1991"),
-        ]
+        assert iter(token_generator) is token_generator
 
-        result = list(lexer.iter_until_eof())
+    def test_TokenGenerator_next(self) -> None:
+        token_generator = TokenGenerator("guido 1991", RULES)
 
-        assert result == expected
-
-    def test_reset_goes_to_zero(self) -> None:
-        lexer = Lexer("guido 1991", self.RULES)
-        _ = list(lexer.iter_until_eof())
-
-        lexer.reset()
-
-        assert lexer.position == 0
-        assert lexer.row_col == (1, 1)
+        assert next(token_generator) == Token("NAME", "guido")
+        assert next(token_generator) == Token("WHITESPACE", " ")
+        assert next(token_generator) == Token("INTEGER", "1991")
+        with pytest.raises(StopIteration):
+            next(token_generator)
 
     def test_invalid_character_raises_LexingError(self) -> None:
-        lexer = Lexer("1 + 1", self.RULES)
+        token_generator = TokenGenerator("1 + 1", RULES)
 
         with pytest.raises(
             LexingError, match=r"Invalid character \+ at position 2"
         ) as excinfo:
-            _ = list(lexer.iter_until_eof())
+            _ = list(token_generator)
 
         assert excinfo.value.text == "1 + 1"
         assert excinfo.value.character == "+"
@@ -56,7 +42,50 @@ class TestLexer:
 
     def test_row_col_shows_rich_line_information(self) -> None:
         text = "abcdef\n123456"
-        lexer = Lexer(text, self.RULES)
-        lexer._position = text.find("6")
+        token_generator = TokenGenerator(text, RULES)
+        token_generator._text_idx = text.find("6")
 
-        assert lexer.row_col == (2, 6)
+        assert token_generator.row_col == (2, 6)
+
+
+class TestLexer:
+    def test_next_token(self) -> None:
+        lexer = Lexer("guido 1991", RULES)
+        tokens = [
+            Token("NAME", "guido"),
+            Token("WHITESPACE", " "),
+            Token("INTEGER", "1991"),
+        ]
+
+        for token in tokens:
+            assert lexer.next_token() == token
+
+        assert lexer._tokens == tokens
+
+    def test_peek_token(self) -> None:
+        lexer = Lexer("guido 1991", RULES)
+        pos = lexer.mark()
+        lexer.next_token()
+        lexer.next_token()
+        lexer.rewind(pos)
+
+        assert lexer.peek_token() == Token("NAME", "guido")
+        assert lexer._token_idx == pos
+        assert lexer._tokens == [
+            Token("NAME", "guido"),
+            Token("WHITESPACE", " "),
+        ]
+
+    def test_mark(self) -> None:
+        lexer = Lexer("guido 1991", RULES)
+
+        assert lexer.mark() == lexer._token_idx
+
+    def test_rewind(self) -> None:
+        lexer = Lexer("guido 1991", RULES)
+        lexer.next_token()
+        lexer.next_token()
+
+        lexer.rewind(0)
+
+        assert lexer._token_idx == 0
