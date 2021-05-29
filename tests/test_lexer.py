@@ -62,6 +62,8 @@ class TestLexer:
 
         assert lexer._tokens == tokens
 
+        assert lexer.next_token() is None
+
     def test_peek_token(self) -> None:
         lexer = Lexer("guido 1991", RULES)
         pos = lexer.mark()

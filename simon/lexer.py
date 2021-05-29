@@ -73,12 +73,16 @@ class Lexer:
         ),
     )
 
-    def peek_token(self) -> Token:
+    def peek_token(self) -> t.Optional[Token]:
         if self._token_idx == len(self._tokens):
-            self._tokens.append(next(self._token_generator))
+            token = next(self._token_generator, None)
+            if token is not None:
+                self._tokens.append(token)
+            else:
+                return None
         return self._tokens[self._token_idx]
 
-    def next_token(self) -> Token:
+    def next_token(self) -> t.Optional[Token]:
         token = self.peek_token()
         self._token_idx += 1
         return token
