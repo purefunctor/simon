@@ -1,0 +1,33 @@
+[tool.poetry]
+name = "simon"
+version = "0.1.0"
+description = "Simple PEG parsing in Python."
+authors = ["PureFunctor <purefunctor@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+attrs = "^21.2.0"
+
+[tool.poetry.dev-dependencies]
+black = "^21.5b1"
+coverage = {extras = ["toml"], version = "^5.5"}
+flake8 = "^3.9.2"
+flake8-annotations = "^2.6.2"
+flake8-import-order = "^0.18.1"
+mypy = "^0.812"
+pre-commit = "^2.13.0"
+pytest = "^5.2"
+taskipy = "^1.8.1"
+
+[tool.taskipy.tasks]
+test = "pytest"
+lint = "pre-commit run --all-files"
+cov = "coverage run --branch -m pytest && coverage report && coverage html"
+
+[tool.coverage.run]
+source = ["simon"]
+omit = ["*tests*"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
