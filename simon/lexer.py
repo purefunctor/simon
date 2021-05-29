@@ -4,6 +4,8 @@ import typing as t
 
 import attr
 
+from simon.errors import ParsingError
+
 
 @attr.s(frozen=True, slots=True)
 class Token:
@@ -30,7 +32,7 @@ class TokenStream:
                 self._text_idx = match.end(0)
                 return Token(rule, match.group(0))
         else:
-            raise LexingError(
+            raise ParsingError(
                 self.text, self.text[self._text_idx], self._text_idx, self.row_col
             )
 
@@ -92,18 +94,3 @@ class Lexer:
 
     def rewind(self, idx: int) -> None:
         self._token_idx = idx
-
-
-class LexingError(Exception):
-    """Raised during lexing, containing error metadata."""
-
-    def __init__(
-        self, text: str, character: str, position: int, row_col: tuple[int, int]
-    ) -> None:
-        self.text = text
-        self.character = character
-        self.position = position
-        self.row_col = row_col
-
-    def __str__(self) -> str:
-        return f"Invalid character {self.character} at position {self.position}"
