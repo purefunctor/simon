@@ -17,20 +17,20 @@ class Token:
 
 @attr.s
 class TokenStream:
-    """Generates tokens from text and parsing rules."""
+    """Generates tokens from text and patterns."""
 
     text: str = attr.ib(on_setattr=attr.setters.frozen)
-    rules: dict[str, t.Pattern[str]] = attr.ib(on_setattr=attr.setters.frozen)
+    patterns: dict[str, t.Pattern[str]] = attr.ib(on_setattr=attr.setters.frozen)
 
     _text_idx: int = attr.ib(init=False, default=0)
 
     def _generate_token(self) -> t.Optional[Token]:
         if self._text_idx >= len(self.text):
             return None
-        for rule, pattern in self.rules.items():
+        for terminal, pattern in self.patterns.items():
             if match := pattern.match(self.text, self._text_idx):
                 self._text_idx = match.end(0)
-                return Token(rule, match.group(0))
+                return Token(terminal, match.group(0))
         else:
             raise ParsingError(
                 self.text, self.text[self._text_idx], self._text_idx, self.row_col
@@ -63,7 +63,7 @@ class Lexer:
     """Provides an API for stateful on-demand lexing."""
 
     text: str = attr.ib(on_setattr=attr.setters.frozen)
-    rules: dict[str, t.Pattern[str]] = attr.ib(on_setattr=attr.setters.frozen)
+    patterns: dict[str, t.Pattern[str]] = attr.ib(on_setattr=attr.setters.frozen)
 
     _tokens: list[Token] = attr.ib(init=False, factory=list)
     _token_idx: int = attr.ib(init=False, default=0)
@@ -71,7 +71,7 @@ class Lexer:
     _token_stream: TokenStream = attr.ib(
         init=False,
         default=attr.Factory(
-            lambda self: TokenStream(self.text, self.rules), takes_self=True
+            lambda self: TokenStream(self.text, self.patterns), takes_self=True
         ),
     )
 
