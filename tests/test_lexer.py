@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from simon.lexer import Lexer, LexingError, Token, TokenGenerator
+from simon.lexer import Lexer, LexingError, Token, TokenStream
 
 
 RULES = {
@@ -12,28 +12,28 @@ RULES = {
 }
 
 
-class TestTokenGenerator:
-    def test_TokenGenerator_iter(self) -> None:
-        token_generator = TokenGenerator("guido 1991", RULES)
+class TestTokenStream:
+    def test_TokenStream_iter(self) -> None:
+        token_stream = TokenStream("guido 1991", RULES)
 
-        assert iter(token_generator) is token_generator
+        assert iter(token_stream) is token_stream
 
-    def test_TokenGenerator_next(self) -> None:
-        token_generator = TokenGenerator("guido 1991", RULES)
+    def test_TokenStream_next(self) -> None:
+        token_stream = TokenStream("guido 1991", RULES)
 
-        assert next(token_generator) == Token("NAME", "guido")
-        assert next(token_generator) == Token("WHITESPACE", " ")
-        assert next(token_generator) == Token("INTEGER", "1991")
+        assert next(token_stream) == Token("NAME", "guido")
+        assert next(token_stream) == Token("WHITESPACE", " ")
+        assert next(token_stream) == Token("INTEGER", "1991")
         with pytest.raises(StopIteration):
-            next(token_generator)
+            next(token_stream)
 
     def test_invalid_character_raises_LexingError(self) -> None:
-        token_generator = TokenGenerator("1 + 1", RULES)
+        token_stream = TokenStream("1 + 1", RULES)
 
         with pytest.raises(
             LexingError, match=r"Invalid character \+ at position 2"
         ) as excinfo:
-            _ = list(token_generator)
+            _ = list(token_stream)
 
         assert excinfo.value.text == "1 + 1"
         assert excinfo.value.character == "+"
@@ -42,10 +42,10 @@ class TestTokenGenerator:
 
     def test_row_col_shows_rich_line_information(self) -> None:
         text = "abcdef\n123456"
-        token_generator = TokenGenerator(text, RULES)
-        token_generator._text_idx = text.find("6")
+        token_stream = TokenStream(text, RULES)
+        token_stream._text_idx = text.find("6")
 
-        assert token_generator.row_col == (2, 6)
+        assert token_stream.row_col == (2, 6)
 
 
 class TestLexer:

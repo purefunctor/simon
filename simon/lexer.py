@@ -14,7 +14,7 @@ class Token:
 
 
 @attr.s
-class TokenGenerator:
+class TokenStream:
     """Generates tokens from text and parsing rules."""
 
     text: str = attr.ib(on_setattr=attr.setters.frozen)
@@ -34,7 +34,7 @@ class TokenGenerator:
                 self.text, self.text[self._text_idx], self._text_idx, self.row_col
             )
 
-    def __iter__(self) -> TokenGenerator:
+    def __iter__(self) -> TokenStream:
         return self
 
     def __next__(self) -> Token:
@@ -66,16 +66,16 @@ class Lexer:
     _tokens: list[Token] = attr.ib(init=False, factory=list)
     _token_idx: int = attr.ib(init=False, default=0)
 
-    _token_generator: TokenGenerator = attr.ib(
+    _token_stream: TokenStream = attr.ib(
         init=False,
         default=attr.Factory(
-            lambda self: TokenGenerator(self.text, self.rules), takes_self=True
+            lambda self: TokenStream(self.text, self.rules), takes_self=True
         ),
     )
 
     def peek_token(self) -> t.Optional[Token]:
         if self._token_idx == len(self._tokens):
-            token = next(self._token_generator, None)
+            token = next(self._token_stream, None)
             if token is not None:
                 self._tokens.append(token)
             else:
