@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from simon.errors import ParsingError
+from simon.errors import UnknownTokenError
 from simon.lexer import _compute_row_col, Lexer, Token, TokenStream
 
 
@@ -28,11 +28,11 @@ class TestTokenStream:
         with pytest.raises(StopIteration):
             next(token_stream)
 
-    def test_invalid_character_raises_LexingError(self) -> None:
+    def test_invalid_character_raises_UnknownTokenError(self) -> None:
         token_stream = TokenStream("1 + 1", PATTERNS)
 
         with pytest.raises(
-            ParsingError, match=r"Invalid character \+ at position 2"
+            UnknownTokenError, match=r"Invalid character \+ at position 2"
         ) as excinfo:
             _ = list(token_stream)
 

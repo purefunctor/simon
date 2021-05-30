@@ -4,7 +4,7 @@ import typing as t
 
 import attr
 
-from simon.errors import ParsingError
+from simon.errors import UnknownTokenError
 
 
 @attr.s(frozen=True, slots=True)
@@ -32,7 +32,7 @@ class TokenStream:
                 self._text_idx = match.end(0)
                 return Token(terminal, match.group(0))
         else:
-            raise ParsingError(
+            raise UnknownTokenError(
                 self.text,
                 self.text[self._text_idx],
                 self._text_idx,
