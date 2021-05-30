@@ -33,7 +33,10 @@ class TokenStream:
                 return Token(terminal, match.group(0))
         else:
             raise ParsingError(
-                self.text, self.text[self._text_idx], self._text_idx, self.row_col
+                self.text,
+                self.text[self._text_idx],
+                self._text_idx,
+                _compute_row_col(self.text, self._text_idx),
             )
 
     def __iter__(self) -> TokenStream:
@@ -43,19 +46,6 @@ class TokenStream:
         if (token := self._generate_token()) is None:
             raise StopIteration
         return token
-
-    @property
-    def row_col(self) -> tuple[int, int]:
-        row = 1
-        col = 1
-        current = 0
-        while current != self._text_idx:
-            if self.text[current] == "\n":
-                row += 1
-                col = 0
-            col += 1
-            current += 1
-        return (row, col)
 
 
 @attr.s
@@ -94,3 +84,16 @@ class Lexer:
 
     def rewind(self, idx: int) -> None:
         self._token_idx = idx
+
+
+def _compute_row_col(text: str, position: int) -> tuple[int, int]:
+    row = 1
+    col = 1
+    current = 0
+    while current != position:
+        if text[current] == "\n":
+            row += 1
+            col = 0
+        col += 1
+        current += 1
+    return (row, col)

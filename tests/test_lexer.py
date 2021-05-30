@@ -3,7 +3,7 @@ import re
 import pytest
 
 from simon.errors import ParsingError
-from simon.lexer import Lexer, Token, TokenStream
+from simon.lexer import _compute_row_col, Lexer, Token, TokenStream
 
 
 PATTERNS = {
@@ -41,12 +41,11 @@ class TestTokenStream:
         assert excinfo.value.position == 2
         assert excinfo.value.row_col == (1, 3)
 
-    def test_row_col_shows_rich_line_information(self) -> None:
+    def test_compute_row_col_shows_rich_information(self) -> None:
         text = "abcdef\n123456"
-        token_stream = TokenStream(text, PATTERNS)
-        token_stream._text_idx = text.find("6")
+        pos = text.find("6")
 
-        assert token_stream.row_col == (2, 6)
+        assert _compute_row_col(text, pos) == (2, 6)
 
 
 class TestLexer:
