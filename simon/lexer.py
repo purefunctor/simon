@@ -76,7 +76,8 @@ class Lexer:
 
     def next_token(self) -> t.Optional[Token]:
         token = self.peek_token()
-        self._token_idx += 1
+        if token is not None:
+            self._token_idx += 1
         return token
 
     def mark(self) -> int:
