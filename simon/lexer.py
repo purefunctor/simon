@@ -5,6 +5,7 @@ import typing as t
 import attr
 
 from simon.errors import UnknownTokenError
+from simon.utils import _compute_row_col
 
 
 @attr.s(frozen=True, slots=True)
@@ -85,16 +86,3 @@ class Lexer:
 
     def rewind(self, idx: int) -> None:
         self._token_idx = idx
-
-
-def _compute_row_col(text: str, position: int) -> tuple[int, int]:
-    row = 1
-    col = 1
-    current = 0
-    while current != position:
-        if text[current] == "\n":
-            row += 1
-            col = 0
-        col += 1
-        current += 1
-    return (row, col)

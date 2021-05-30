@@ -29,23 +29,17 @@ class TestTokenStream:
             next(token_stream)
 
     def test_invalid_character_raises_UnknownTokenError(self) -> None:
-        token_stream = TokenStream("1 + 1", PATTERNS)
+        token_stream = TokenStream("1\n+ 1", PATTERNS)
 
         with pytest.raises(
             UnknownTokenError, match=r"Invalid character \+ at position 2"
         ) as excinfo:
             _ = list(token_stream)
 
-        assert excinfo.value.text == "1 + 1"
+        assert excinfo.value.text == "1\n+ 1"
         assert excinfo.value.character == "+"
         assert excinfo.value.position == 2
-        assert excinfo.value.row_col == (1, 3)
-
-    def test_compute_row_col_shows_rich_information(self) -> None:
-        text = "abcdef\n123456"
-        pos = text.find("6")
-
-        assert _compute_row_col(text, pos) == (2, 6)
+        assert excinfo.value.row_col == (2, 1)
 
 
 class TestLexer:
