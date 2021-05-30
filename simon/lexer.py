@@ -5,7 +5,6 @@ import typing as t
 import attr
 
 from simon.errors import UnknownTokenError
-from simon.utils import _compute_row_col
 
 
 @attr.s(frozen=True, slots=True)
@@ -33,12 +32,7 @@ class TokenStream:
                 self._text_idx = match.end(0)
                 return Token(terminal, match.group(0))
         else:
-            raise UnknownTokenError(
-                self.text,
-                self.text[self._text_idx],
-                self._text_idx,
-                _compute_row_col(self.text, self._text_idx),
-            )
+            raise UnknownTokenError(self.text, self._text_idx)
 
     def __iter__(self) -> TokenStream:
         return self

@@ -3,7 +3,7 @@ import re
 import pytest
 
 from simon.errors import UnknownTokenError
-from simon.lexer import _compute_row_col, Lexer, Token, TokenStream
+from simon.lexer import Lexer, Token, TokenStream
 
 
 PATTERNS = {
