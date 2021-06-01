@@ -155,6 +155,25 @@ class Many(Expression):
         return Node(results, position, _position)
 
 
+class PositiveLookahead(Expression):
+    expression: Expression = attr.ib()
+
+    def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
+        if self.expression.match(text, position, grammar):
+            return Node([], position, position)
+        return None
+
+
+@attr.s(frozen=True)
+class NegativeLookahead(Expression):
+    expression: Expression = attr.ib()
+
+    def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
+        if self.expression.match(text, position, grammar):
+            return None
+        return Node([], position, position)
+
+
 _T = t.TypeVar("_T")
 
 
