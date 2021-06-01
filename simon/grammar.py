@@ -8,6 +8,20 @@ import attr
 
 @attr.s(frozen=True, slots=True)
 class Grammar:
+    """Represents the Parsing Expression Grammar
+
+    PEGs are defined as the following:
+
+    Σ : a finite set of terminals
+
+    N : a finite set of nonterminals
+
+    P : a finite set of parsing rules
+      | where
+        : A ← e, A ∈ N, e is a parsing expression
+
+    e_s : the "starting" expression
+    """
     rules: dict[str, Rule] = attr.ib()
     terminals: dict[str, Terminal] = attr.ib()
 
@@ -26,6 +40,11 @@ class Grammar:
 
 @attr.s(frozen=True, slots=True)
 class Rule:
+    """Represents a rule definition in the PEG
+
+    For ease of use in this library, the right hand side of a rule definition
+    must be an ordered choice of expressions represented by `Alts`.
+    """
     name: str = attr.ib()
     rhs: Alts = attr.ib()
 
@@ -38,6 +57,12 @@ class Rule:
 
 @attr.s(frozen=True, slots=True)
 class Terminal:
+    """Represents a terminal definition in the PEG
+
+    A terminal in a PEG is the smallest possible unit of text and often serves
+    as aliases for string literals. Terminals do not expand to other terminals
+    or nonterminals.
+    """
     name: str = attr.ib()
     term: str = attr.ib()
 
@@ -49,12 +74,16 @@ class Terminal:
 
 
 class Expression:
+    """Abstract base class for expressions"""
+
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
         raise NotImplementedError
 
 
 @attr.s(frozen=True)
 class Literal(Expression):
+    """Represents a string literal or inline terminal"""
+
     literal: str = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -66,6 +95,7 @@ class Literal(Expression):
 
 @attr.s(frozen=True)
 class RegEx(Expression):
+    """Represents an arbitrary regular expression"""
     pattern: str = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -77,6 +107,8 @@ class RegEx(Expression):
 
 @attr.s(frozen=True)
 class Name(Expression):
+    """Represents a reference to a rule or terminal"""
+
     name: str = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -88,6 +120,8 @@ class Name(Expression):
 
 @attr.s(frozen=True)
 class Alts(Expression):
+    """Represents ordered choice of expressions"""
+
     alts: list[Expression] = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -100,6 +134,8 @@ class Alts(Expression):
 
 @attr.s(frozen=True)
 class Sequence(Expression):
+    """Represents a sequence of parsing expressions"""
+
     expressions: list[Expression] = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -117,6 +153,7 @@ class Sequence(Expression):
 
 @attr.s(frozen=True)
 class Optional(Expression):
+    """Represents an expression that may not be present"""
     optional: Expression = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -127,6 +164,7 @@ class Optional(Expression):
 
 @attr.s(frozen=True)
 class Some(Expression):
+    """Represents zero or more expressions"""
     expression: Expression = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -142,6 +180,7 @@ class Some(Expression):
 
 @attr.s(frozen=True)
 class Many(Expression):
+    """Represents one or more expressions"""
     expression: Expression = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -159,7 +198,12 @@ class Many(Expression):
         return Node(results, position, _position)
 
 
+@attr.s(frozen=True)
 class PositiveLookahead(Expression):
+    """Represents a positive lookahead
+
+    Returns an empty node if an expression matches, fails otherwise.
+    """
     expression: Expression = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -170,6 +214,10 @@ class PositiveLookahead(Expression):
 
 @attr.s(frozen=True)
 class NegativeLookahead(Expression):
+    """Represents a negative lookahead
+
+    Fails if a given expression matches, an empty Node is returned otherwise.
+    """
     expression: Expression = attr.ib()
 
     def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
@@ -183,6 +231,7 @@ _T = t.TypeVar("_T")
 
 @attr.s(slots=True)
 class Node(t.Generic[_T]):
+    """Represents an AST node in the resulting parse tree"""
     children: list[_T] = attr.ib()
     start: int = attr.ib()
     end: int = attr.ib()
