@@ -115,6 +115,46 @@ class Sequence(Expression):
             return Node(results, position, _position)
 
 
+@attr.s(frozen=True)
+class Optional(Expression):
+    optional: Expression = attr.ib()
+
+    def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
+        if result := self.optional.match(text, position, grammar):
+            return result
+        return Node([], position, position)
+
+
+@attr.s(frozen=True)
+class Some(Expression):
+    expression: Expression = attr.ib()
+
+    def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
+        results = []
+        _position = position
+        while result := self.expression.match(text, _position, grammar):
+            results.append(result)
+            _position = result.end
+        return Node(results, position, _position)
+
+
+@attr.s(frozen=True)
+class Many(Expression):
+    expression: Expression = attr.ib()
+
+    def match(self, text: str, position: int, grammar: Grammar) -> t.Optional[Node]:
+        _position = position
+        head = self.expression.match(text, position, grammar)
+        if head is None:
+            return None
+        _position = head.end
+        results = [head]
+        while result := self.expression.match(text, _position, grammar):
+            results.append(result)
+            _position = result.end
+        return Node(results, position, _position)
+
+
 _T = t.TypeVar("_T")
 
 
