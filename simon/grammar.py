@@ -133,6 +133,8 @@ class Some(Expression):
         results = []
         _position = position
         while result := self.expression.match(text, _position, grammar):
+            if result.end - result.start == 0:
+                break
             results.append(result)
             _position = result.end
         return Node(results, position, _position)
@@ -150,6 +152,8 @@ class Many(Expression):
         _position = head.end
         results = [head]
         while result := self.expression.match(text, _position, grammar):
+            if result.end - result.start == 0:
+                break
             results.append(result)
             _position = result.end
         return Node(results, position, _position)
