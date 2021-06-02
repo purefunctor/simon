@@ -74,7 +74,7 @@ class Expression:
         raise NotImplementedError
 
 
-@attr.s(frozen=True, slots=True)
+@attr.s(slots=True)
 class Rule(Expression):
     """Represents a rule definition in the PEG"""
 
@@ -90,7 +90,7 @@ class Rule(Expression):
         return None
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class Literal(Expression):
     """Represents a string literal or inline terminal"""
 
@@ -111,7 +111,7 @@ class Literal(Expression):
         return None
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class RegEx(Expression):
     """Represents an arbitrary regular expression"""
 
@@ -126,7 +126,7 @@ class RegEx(Expression):
         return None
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class Alts(Expression):
     """Represents ordered choice of expressions"""
 
@@ -142,7 +142,7 @@ class Alts(Expression):
             return None
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class Sequence(Expression):
     """Represents a sequence of parsing expressions"""
 
@@ -163,7 +163,7 @@ class Sequence(Expression):
             return Node(results, position, _position)
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class Optional(Expression):
     """Represents an expression that may not be present"""
 
@@ -177,7 +177,7 @@ class Optional(Expression):
         return Node([], position, position)
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class Some(Expression):
     """Represents zero or more expressions"""
 
@@ -196,7 +196,7 @@ class Some(Expression):
         return Node(results, position, _position)
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class Many(Expression):
     """Represents one or more expressions"""
 
@@ -219,7 +219,7 @@ class Many(Expression):
         return Node(results, position, _position)
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class PositiveLookahead(Expression):
     """Represents a positive lookahead
 
@@ -236,7 +236,7 @@ class PositiveLookahead(Expression):
         return None
 
 
-@attr.s(frozen=True)
+@attr.s(slots=True)
 class NegativeLookahead(Expression):
     """Represents a negative lookahead
 
