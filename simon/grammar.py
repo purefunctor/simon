@@ -22,14 +22,18 @@ class Grammar:
 
     e_s : the "starting" expression
     """
+
     rules: dict[str, Rule] = attr.ib()
     terminals: dict[str, Terminal] = attr.ib()
+    start: str = attr.ib(default="start")
 
     @classmethod
-    def from_list(cls, rules: list[Rule], terminals: list[Terminal]) -> Grammar:
+    def from_list(
+        cls, rules: list[Rule], terminals: list[Terminal], start: str = "start"
+    ) -> Grammar:
         _rules = {rule.name: rule for rule in rules}
         _terminals = {term.name: term for term in terminals}
-        return cls(_rules, _terminals)
+        return cls(_rules, _terminals, start)
 
     def __getitem__(self, name: str) -> t.Union[Rule, Terminal]:
         if name.isupper():
