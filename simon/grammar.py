@@ -7,6 +7,17 @@ import attr
 
 
 @attr.s(frozen=True, slots=True)
+class Parser:
+    grammar: Grammar = attr.ib()
+    _caches: dict = attr.ib(init=False, repr=False, factory=dict)
+
+    def parse(self, text: str, position: int = 0) -> t.Optional[Node]:
+        if text not in self._caches:
+            self._caches[text] = {}
+        return self.grammar.parse(text, position, self._caches[text])
+
+
+@attr.s(frozen=True, slots=True)
 class Grammar:
     """Represents the Parsing Expression Grammar
 
@@ -40,6 +51,12 @@ class Grammar:
             return self.terminals[name]
         else:
             return self.rules[name]
+
+    def parse(
+        self, text: str, position: int = 0, _cache: dict = None
+    ) -> t.Optional[Node]:
+        cache = {} if _cache is None else _cache
+        return self[self.start].match(text, position, self, cache)
 
 
 @attr.s(frozen=True, slots=True)
