@@ -48,8 +48,14 @@ class Grammar:
         return self.rules[self.start].match(text, position, self, cache)
 
 
+_R = t.TypeVar("_R")
+
+
+@attr.s
 class Expression:
     """Abstract base class for expressions"""
+
+    _action: t.Callable[[Node], _R] = attr.ib(init=False, default=lambda n: n)
 
     def match(
         self,
@@ -72,6 +78,10 @@ class Expression:
         self, text: str, position: int, grammar: Grammar, cache: dict
     ) -> t.Optional[Node]:
         raise NotImplementedError
+
+    def with_action(self, action: t.Callable[[Node], _R]) -> Expression:
+        self._action = action
+        return self
 
 
 @attr.s(slots=True)
