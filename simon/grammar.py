@@ -35,99 +35,17 @@ class Grammar:
     """
 
     rules: dict[str, Rule] = attr.ib()
-    terminals: dict[str, Terminal] = attr.ib()
     start: str = attr.ib(default="start")
 
     @classmethod
-    def from_list(
-        cls, rules: list[Rule], terminals: list[Terminal], start: str = "start"
-    ) -> Grammar:
-        _rules = {rule.name: rule for rule in rules}
-        _terminals = {term.name: term for term in terminals}
-        return cls(_rules, _terminals, start)
-
-    def __getitem__(self, name: str) -> t.Union[Rule, Terminal]:
-        if name.isupper():
-            return self.terminals[name]
-        else:
-            return self.rules[name]
+    def from_list(cls, *rules: Rule, start: str = "start") -> Grammar:
+        return cls({rule.name: rule for rule in rules}, start)
 
     def parse(
         self, text: str, position: int = 0, _cache: dict = None
     ) -> t.Optional[Node]:
         cache = {} if _cache is None else _cache
-        return self[self.start].match(text, position, self, cache)
-
-
-@attr.s(frozen=True, slots=True)
-class Rule:
-    """Represents a rule definition in the PEG
-
-    For ease of use in this library, the right hand side of a rule definition
-    must be an ordered choice of expressions represented by `Alts`.
-    """
-
-    name: str = attr.ib()
-    rhs: Alts = attr.ib()
-
-    # TODO: Shares code with `Expression`, probably better to
-    # extract this to a common subclass now.
-    def match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        key = (id(self), position)
-        if key not in cache:
-            if result := self._match(text, position, grammar, cache):
-                cache[key] = result
-                return result
-        else:
-            return cache[key]
-        cache[key] = None
-        return None
-
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        if result := self.rhs.match(text, position, grammar, cache):
-            result.type_ = self.name
-            return result
-        return None
-
-
-@attr.s(frozen=True, slots=True)
-class Terminal:
-    """Represents a terminal definition in the PEG
-
-    A terminal in a PEG is the smallest possible unit of text and often serves
-    as aliases for string literals. Terminals do not expand to other terminals
-    or nonterminals.
-    """
-
-    name: str = attr.ib()
-    term: str = attr.ib()
-
-    # TODO: Shares code with `Expression`, probably better to
-    # extract this to a common subclass now.
-    def match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        key = (id(self), position)
-        if key not in cache:
-            if result := self._match(text, position, grammar, cache):
-                cache[key] = result
-                return result
-        else:
-            return cache[key]
-        cache[key] = None
-        return None
-
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        pattern = re.compile(re.escape(self.term))
-        if result := pattern.match(text, position):
-            return Node([result.group(0)], position, result.end(0))
-        return None
+        return self.rules[self.start].match(text, position, self, cache)
 
 
 class Expression:
@@ -140,7 +58,7 @@ class Expression:
         grammar: Grammar,
         cache: dict,
     ) -> t.Optional[Node]:
-        key = (id(self), position)
+        key = (id(self), self.__class__.__name__, position)
         if key not in cache:
             if result := self._match(text, position, grammar, cache):
                 cache[key] = result
@@ -156,17 +74,39 @@ class Expression:
         raise NotImplementedError
 
 
+@attr.s(frozen=True, slots=True)
+class Rule(Expression):
+    """Represents a rule definition in the PEG"""
+
+    name: str = attr.ib()
+    expr: Expression = attr.ib()
+
+    def _match(
+        self, text: str, position: int, grammar: Grammar, cache: dict
+    ) -> t.Optional[Node]:
+        if result := self.expr.match(text, position, grammar, cache):
+            result.type_ = self.name
+            return result
+        return None
+
+
 @attr.s(frozen=True)
 class Literal(Expression):
     """Represents a string literal or inline terminal"""
 
     literal: str = attr.ib()
+    _pattern: t.Pattern[str] = attr.ib(
+        init=False,
+        repr=False,
+        default=attr.Factory(
+            lambda self: re.compile(re.escape(self.literal)), takes_self=True
+        ),
+    )
 
     def _match(
         self, text: str, position: int, grammar: Grammar, cache: dict
     ) -> t.Optional[Node]:
-        pattern = re.compile(re.escape(self.literal))
-        if result := pattern.match(text, position):
+        if result := self._pattern.match(text, position):
             return Node([result.group(0)], position, result.end(0))
         return None
 
@@ -183,21 +123,6 @@ class RegEx(Expression):
         pattern = re.compile(self.pattern)
         if result := pattern.match(text, position):
             return Node([result.group(0)], position, result.end(0))
-        return None
-
-
-@attr.s(frozen=True)
-class Name(Expression):
-    """Represents a reference to a rule or terminal"""
-
-    name: str = attr.ib()
-
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        matchable = grammar[self.name]
-        if result := matchable.match(text, position, grammar, cache):
-            return result
         return None
 
 
