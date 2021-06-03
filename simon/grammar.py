@@ -11,7 +11,7 @@ class Parser:
     grammar: Grammar = attr.ib()
     _states: dict = attr.ib(init=False, repr=False, factory=dict)
 
-    def parse(self, text: str, position: int = 0) -> t.Optional[Node]:
+    def parse(self, text: str, position: int = 0) -> t.Any:
         state = ParserState(text, position, {})
         if text not in self._states:
             self._states[text] = state
@@ -55,27 +55,27 @@ class Grammar:
     def from_list(cls, *rules: Rule, start: str = "start") -> Grammar:
         return cls({rule.name: rule for rule in rules}, start)
 
-    def parse(self, state: ParserState) -> t.Optional[Node]:
+    def parse(self, state: ParserState) -> t.Any:
         return self.rules[self.start].parse(state, self)
 
 
-_R = t.TypeVar("_R")
+_E = t.TypeVar("_E", bound="Expression")
 
 
 @attr.s
 class Expression:
     """Abstract base class for expressions"""
 
-    _action: t.Callable[[Node], _R] = attr.ib(
+    _action: t.Callable[[Node], t.Any] = attr.ib(
         init=False, default=lambda n: n, repr=False
     )
 
-    def parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         # TODO: Perhaps we can approach caching differently as
         # to not blow up memory when parsing larger text.
         key = id(self), state.position
         if key not in state.cache:
-            if result := self._parse(state, grammar):
+            if (result := self._parse(state, grammar)) is not None:
                 _result = self._action(result)
                 state.cache[key] = _result
                 return _result
@@ -84,12 +84,8 @@ class Expression:
         state.cache[key] = None
         return None
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         raise NotImplementedError
-
-    def with_action(self, action: t.Callable[[Node], _R]) -> Expression:
-        self._action = action
-        return self
 
 
 @attr.s(slots=True)
@@ -99,8 +95,8 @@ class Rule(Expression):
     name: str = attr.ib()
     expr: Expression = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
-        if result := self.expr.parse(state, grammar):
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
+        if (result := self.expr.parse(state, grammar)) is not None:
             if isinstance(result, Node):
                 result.type_ = self.name
             return result
@@ -120,9 +116,9 @@ class Literal(Expression):
         ),
     )
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         position = state.mark()
-        if result := self._pattern.match(state.text, state.position):
+        if (result := self._pattern.match(state.text, state.position)) is not None:
             # `Literal`s and `RegEx`s are the smallest units of
             # expressions in the class hierarchy. As such, they
             # must advance the current position in the state.
@@ -144,9 +140,9 @@ class RegEx(Expression):
         ),
     )
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         position = state.mark()
-        if result := self._pattern.match(state.text, state.position):
+        if (result := self._pattern.match(state.text, state.position)) is not None:
             # `Literal`s and `RegEx`s are the smallest units of
             # expressions in the class hierarchy. As such, they
             # must advance the current position in the state.
@@ -161,10 +157,10 @@ class Alts(Expression):
 
     alts: list[Expression] = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         position = state.mark()
         for alt in self.alts:
-            if result := alt.parse(state, grammar):
+            if (result := alt.parse(state, grammar)) is not None:
                 # Immediately return result if an alternative parses
                 return result
             else:
@@ -181,11 +177,11 @@ class Sequence(Expression):
 
     expressions: list[Expression] = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         results = []
         position = state.mark()
         for expression in self.expressions:
-            if result := expression.parse(state, grammar):
+            if (result := expression.parse(state, grammar)) is not None:
                 # Append to `results` if an expression parses
                 results.append(result)
             else:
@@ -203,9 +199,9 @@ class Optional(Expression):
 
     optional: Expression = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         position = state.mark()
-        if result := self.optional.parse(state, grammar):
+        if (result := self.optional.parse(state, grammar)) is not None:
             # Immediately return result if an expression parses
             return result
         # Otherwise, backtrack to the previous position
@@ -219,7 +215,7 @@ class Some(Expression):
 
     expression: Expression = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         results = []
         position = current = state.mark()
         while result := self.expression.parse(state, grammar):
@@ -236,7 +232,7 @@ class Many(Expression):
 
     expression: Expression = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         # Ensure that at least one item is present
         position = state.mark()
         child = self.expression.parse(state, grammar)
@@ -262,7 +258,7 @@ class PositiveLookahead(Expression):
 
     expression: Expression = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         # If an expression successfully parses, return an
         # empty node, failing the parse otherwise.
         position = state.mark()
@@ -281,7 +277,7 @@ class NegativeLookahead(Expression):
 
     expression: Expression = attr.ib()
 
-    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Any:
         # If an expression successfully parses, fail the
         # parse, returning an empty node otherwise.
         position = state.mark()
