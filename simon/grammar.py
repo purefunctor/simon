@@ -9,12 +9,26 @@ import attr
 @attr.s(frozen=True, slots=True)
 class Parser:
     grammar: Grammar = attr.ib()
-    _caches: dict = attr.ib(init=False, repr=False, factory=dict)
+    _states: dict = attr.ib(init=False, repr=False, factory=dict)
 
     def parse(self, text: str, position: int = 0) -> t.Optional[Node]:
-        if text not in self._caches:
-            self._caches[text] = {}
-        return self.grammar.parse(text, position, self._caches[text])
+        state = ParserState(text, position, {})
+        if text not in self._states:
+            self._states[text] = state
+        return self.grammar.parse(state)
+
+
+@attr.s(slots=True)
+class ParserState:
+    text: str = attr.ib()
+    position: int = attr.ib()
+    cache: dict = attr.ib(factory=dict)
+
+    def mark(self) -> int:
+        return self.position
+
+    def move(self, position: int) -> None:
+        self.position = position
 
 
 @attr.s(frozen=True, slots=True)
@@ -41,11 +55,8 @@ class Grammar:
     def from_list(cls, *rules: Rule, start: str = "start") -> Grammar:
         return cls({rule.name: rule for rule in rules}, start)
 
-    def parse(
-        self, text: str, position: int = 0, _cache: dict = None
-    ) -> t.Optional[Node]:
-        cache = {} if _cache is None else _cache
-        return self.rules[self.start].match(text, position, self, cache)
+    def parse(self, state: ParserState) -> t.Optional[Node]:
+        return self.rules[self.start].parse(state, self)
 
 
 _R = t.TypeVar("_R")
@@ -55,28 +66,25 @@ _R = t.TypeVar("_R")
 class Expression:
     """Abstract base class for expressions"""
 
-    _action: t.Callable[[Node], _R] = attr.ib(init=False, default=lambda n: n)
+    _action: t.Callable[[Node], _R] = attr.ib(
+        init=False, default=lambda n: n, repr=False
+    )
 
-    def match(
-        self,
-        text: str,
-        position: int,
-        grammar: Grammar,
-        cache: dict,
-    ) -> t.Optional[Node]:
-        key = (id(self), self.__class__.__name__, position)
-        if key not in cache:
-            if result := self._match(text, position, grammar, cache):
-                cache[key] = result
-                return result
+    def parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        # TODO: Perhaps we can approach caching differently as
+        # to not blow up memory when parsing larger text.
+        key = id(self), state.position
+        if key not in state.cache:
+            if result := self._parse(state, grammar):
+                _result = self._action(result)
+                state.cache[key] = _result
+                return _result
         else:
-            return cache[key]
-        cache[key] = None
+            return state.cache[key]
+        state.cache[key] = None
         return None
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
         raise NotImplementedError
 
     def with_action(self, action: t.Callable[[Node], _R]) -> Expression:
@@ -91,11 +99,10 @@ class Rule(Expression):
     name: str = attr.ib()
     expr: Expression = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        if result := self.expr.match(text, position, grammar, cache):
-            result.type_ = self.name
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        if result := self.expr.parse(state, grammar):
+            if isinstance(result, Node):
+                result.type_ = self.name
             return result
         return None
 
@@ -113,11 +120,14 @@ class Literal(Expression):
         ),
     )
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        if result := self._pattern.match(text, position):
-            return Node([result.group(0)], position, result.end(0))
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        position = state.mark()
+        if result := self._pattern.match(state.text, state.position):
+            # `Literal`s and `RegEx`s are the smallest units of
+            # expressions in the class hierarchy. As such, they
+            # must advance the current position in the state.
+            state.move(result.end(0))
+            return Node([result.group(0)], position, state.position)
         return None
 
 
@@ -126,13 +136,22 @@ class RegEx(Expression):
     """Represents an arbitrary regular expression"""
 
     pattern: str = attr.ib()
+    _pattern: t.Pattern[str] = attr.ib(
+        init=False,
+        repr=False,
+        default=attr.Factory(
+            lambda self: re.compile(re.escape(self.literal)), takes_self=True
+        ),
+    )
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        pattern = re.compile(self.pattern)
-        if result := pattern.match(text, position):
-            return Node([result.group(0)], position, result.end(0))
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        position = state.mark()
+        if result := self._pattern.match(state.text, state.position):
+            # `Literal`s and `RegEx`s are the smallest units of
+            # expressions in the class hierarchy. As such, they
+            # must advance the current position in the state.
+            state.move(result.end(0))
+            return Node([result.group(0)], position, state.position)
         return None
 
 
@@ -142,13 +161,17 @@ class Alts(Expression):
 
     alts: list[Expression] = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        position = state.mark()
         for alt in self.alts:
-            if result := alt.match(text, position, grammar, cache):
+            if result := alt.parse(state, grammar):
+                # Immediately return result if an alternative parses
                 return result
+            else:
+                # Else, backtrack to the previous position
+                state.move(position)
         else:
+            # Fail if no alternatives are matched
             return None
 
 
@@ -158,19 +181,20 @@ class Sequence(Expression):
 
     expressions: list[Expression] = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
         results = []
-        _position = position
+        position = state.mark()
         for expression in self.expressions:
-            if result := expression.match(text, _position, grammar, cache):
+            if result := expression.parse(state, grammar):
+                # Append to `results` if an expression parses
                 results.append(result)
-                _position = result.end
             else:
+                # Else, backtrack to previous position and fail
+                state.move(position)
                 return None
         else:
-            return Node(results, position, _position)
+            # Return `results` if all expressions are matched
+            return Node(results, position, state.position)
 
 
 @attr.s(slots=True)
@@ -179,11 +203,13 @@ class Optional(Expression):
 
     optional: Expression = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        if result := self.optional.match(text, position, grammar, cache):
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        position = state.mark()
+        if result := self.optional.parse(state, grammar):
+            # Immediately return result if an expression parses
             return result
+        # Otherwise, backtrack to the previous position
+        state.move(position)
         return Node([], position, position)
 
 
@@ -193,17 +219,15 @@ class Some(Expression):
 
     expression: Expression = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
         results = []
-        _position = position
-        while result := self.expression.match(text, _position, grammar, cache):
-            if result.end - result.start == 0:
+        position = current = state.mark()
+        while result := self.expression.parse(state, grammar):
+            if state.position - current == 0:  # Guard against "empty" nodes
                 break
             results.append(result)
-            _position = result.end
-        return Node(results, position, _position)
+            current = state.mark()  # Advance to the next position
+        return Node(results, position, current)
 
 
 @attr.s(slots=True)
@@ -212,36 +236,38 @@ class Many(Expression):
 
     expression: Expression = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        _position = position
-        head = self.expression.match(text, position, grammar, cache)
-        if head is None:
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        # Ensure that at least one item is present
+        position = state.mark()
+        child = self.expression.parse(state, grammar)
+        if child is None:
+            state.move(position)
             return None
-        _position = head.end
-        results = [head]
-        while result := self.expression.match(text, _position, grammar, cache):
-            if result.end - result.start == 0:
+
+        # This block is functionally equivalent to `Some`,
+        # with `results` being prefixed with `child`
+        results = [child]
+        position = current = state.mark()
+        while result := self.expression.parse(state, grammar):
+            if state.position - current == 0:
                 break
             results.append(result)
-            _position = result.end
-        return Node(results, position, _position)
+            current = state.mark()
+        return Node(results, position, current)
 
 
 @attr.s(slots=True)
 class PositiveLookahead(Expression):
-    """Represents a positive lookahead
-
-    Returns an empty node if an expression matches, fails otherwise.
-    """
+    """Represents a positive lookahead"""
 
     expression: Expression = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        if self.expression.match(text, position, grammar, cache):
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        # If an expression successfully parses, return an
+        # empty node, failing the parse otherwise.
+        position = state.mark()
+        if self.expression.parse(state, grammar):
+            state.move(position)
             return Node([], position, position)
         return None
 
@@ -255,10 +281,12 @@ class NegativeLookahead(Expression):
 
     expression: Expression = attr.ib()
 
-    def _match(
-        self, text: str, position: int, grammar: Grammar, cache: dict
-    ) -> t.Optional[Node]:
-        if self.expression.match(text, position, grammar, cache):
+    def _parse(self, state: ParserState, grammar: Grammar) -> t.Optional[Node]:
+        # If an expression successfully parses, fail the
+        # parse, returning an empty node otherwise.
+        position = state.mark()
+        if self.expression.parse(state, grammar):
+            state.move(position)
             return None
         return Node([], position, position)
 
