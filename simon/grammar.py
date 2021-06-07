@@ -82,30 +82,26 @@ class RegEx(_Pattern[_R]):
     )
 
 
-_I = t.TypeVar("_I")
-
-
 @attr.s(slots=True, cmp=False)
-class _Compound(t.Generic[_I, _R], Expression[_R]):
-    inner: _I = attr.ib()
+class Optional(Expression[_R]):
+    optional: Expression = attr.ib()
 
-
-@attr.s(slots=True, cmp=False)
-class Optional(_Compound[Expression, _R]):
     def _parse(self, state: ParserState) -> t.Any:
         position = state.mark()
-        if (result := self.inner.parse(state)) is not None:
+        if (result := self.optional.parse(state)) is not None:
             return result
         state.move(position)
         return Node([], position, position)
 
 
 @attr.s(slots=True, cmp=False)
-class Some(_Compound[Expression, _R]):
+class Some(Expression[_R]):
+    expression: Expression = attr.ib()
+
     def _parse(self, state: ParserState) -> t.Any:
         results = []
         start = current = state.mark()
-        while (result := self.inner.parse(state)) is not None:
+        while (result := self.expression.parse(state)) is not None:
             if state.position - current == 0:
                 break
             results.append(result)
@@ -114,17 +110,18 @@ class Some(_Compound[Expression, _R]):
 
 
 @attr.s(slots=True, cmp=False)
-class Many(_Compound[Expression, _R]):
+class Many(Expression[_R]):
+    expression: Expression = attr.ib()
+
     def _parse(self, state: ParserState) -> t.Any:
         start = state.mark()
-        child = self.inner.parse(state)
-        if child is None:
+        if (child := self.expression.parse(state)) is None:
             state.move(start)
             return None
 
         results = [child]
         current = state.mark()
-        while (result := self.inner.parse(state)) is not None:
+        while (result := self.expression.parse(state)) is not None:
             if state.position - current == 0:
                 break
             results.append(result)
@@ -133,31 +130,37 @@ class Many(_Compound[Expression, _R]):
 
 
 @attr.s(slots=True, cmp=False)
-class PositiveLookahead(_Compound[Expression, _R]):
+class PositiveLookahead(Expression[_R]):
+    expression: Expression = attr.ib()
+
     def _parse(self, state: ParserState) -> t.Any:
         position = state.mark()
-        if self.inner.parse(state) is not None:
+        if self.expression.parse(state) is not None:
             state.move(position)
             return None
         return Node([], position, position)
 
 
 @attr.s(slots=True, cmp=False)
-class NegativeLookahead(_Compound[Expression, _R]):
+class NegativeLookahead(Expression[_R]):
+    expression: Expression = attr.ib()
+
     def _parse(self, state: ParserState) -> t.Any:
         position = state.mark()
-        if self.inner.parse(state) is not None:
+        if self.expression.parse(state) is not None:
             state.move(position)
             return Node([], position, position)
         return None
 
 
 @attr.s(slots=True, cmp=False)
-class Sequence(_Compound[list[Expression], _R]):
+class Sequence(Expression[_R]):
+    expressions: list[Expression] = attr.ib()
+
     def _parse(self, state: ParserState) -> t.Any:
         results = []
         position = state.mark()
-        for expression in self.inner:
+        for expression in self.expressions:
             if (result := expression.parse(state)) is not None:
                 results.append(result)
             else:
@@ -168,10 +171,12 @@ class Sequence(_Compound[list[Expression], _R]):
 
 
 @attr.s(slots=True, cmp=False)
-class Alternatives(_Compound[list[Expression], _R]):
+class Alternatives(Expression[_R]):
+    alternatives: list[Expression] = attr.ib()
+
     def _parse(self, state: ParserState) -> t.Any:
         position = state.mark()
-        for alternative in self.inner:
+        for alternative in self.alternatives:
             if (result := alternative.parse(state)) is not None:
                 return result
             else:
@@ -180,13 +185,10 @@ class Alternatives(_Compound[list[Expression], _R]):
             return None
 
 
-_S = t.TypeVar("_S")
-
-
 @attr.s(slots=True, cmp=False)
-class Rule(t.Generic[_R, _S], Expression[_R]):
+class Rule(Expression[_R]):
     name: str = attr.ib()
-    expr: Expression[_S] = attr.ib()
+    expr: Expression = attr.ib()
 
     def _parse(self, state: ParserState) -> t.Any:
         if (result := self.expr.parse(state)) is not None:
